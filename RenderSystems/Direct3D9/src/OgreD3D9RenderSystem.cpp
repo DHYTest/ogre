@@ -333,7 +333,6 @@ namespace Ogre
         ConfigOption optAllowDirectX9Ex;
         ConfigOption optVideoMode;
         ConfigOption optMultihead;
-		ConfigOption optBackBufferCount;
         ConfigOption optAA;
         ConfigOption optFPUMode;
         ConfigOption optNVPerfHUD;
@@ -386,13 +385,6 @@ namespace Ogre
                 optDevice.currentValue = driver->DriverDescription();
         }
 
-		optBackBufferCount.name = "Backbuffer Count";
-		optBackBufferCount.immutable = false;
-		optBackBufferCount.possibleValues.push_back( "Auto" );
-		optBackBufferCount.possibleValues.push_back( "1" );
-		optBackBufferCount.possibleValues.push_back( "2" );
-		optBackBufferCount.currentValue = "Auto";
-
         optAA.name = "FSAA";
         optAA.immutable = false;
         optAA.possibleValues.push_back( "None" );
@@ -416,10 +408,10 @@ namespace Ogre
         optNVPerfHUD.possibleValues.push_back( "No" );
 
         // Multiple device memory usage hint.
-        optMultiDeviceMemHint.name = "Multi device memory hint";
-        optMultiDeviceMemHint.possibleValues.push_back("Use minimum system memory");
-        optMultiDeviceMemHint.possibleValues.push_back("Auto hardware buffers management");
-        optMultiDeviceMemHint.currentValue = optMultiDeviceMemHint.possibleValues[1];
+        optMultiDeviceMemHint.name = "Auto hardware buffer management";
+        optMultiDeviceMemHint.possibleValues.push_back("Yes");
+        optMultiDeviceMemHint.possibleValues.push_back("No");
+        optMultiDeviceMemHint.currentValue = optMultiDeviceMemHint.possibleValues[0];
         optMultiDeviceMemHint.immutable = false;
 
         optEnableFixedPipeline.name = "Fixed Pipeline Enabled";
@@ -432,7 +424,6 @@ namespace Ogre
         mOptions[optAllowDirectX9Ex.name] = optAllowDirectX9Ex;
         mOptions[optVideoMode.name] = optVideoMode;
         mOptions[optMultihead.name] = optMultihead;
-		mOptions[optBackBufferCount.name] = optBackBufferCount;
         mOptions[optAA.name] = optAA;
         mOptions[optFPUMode.name] = optFPUMode;
         mOptions[optNVPerfHUD.name] = optNVPerfHUD;
@@ -590,12 +581,9 @@ namespace Ogre
                 mResourceManager->setCreationPolicy(RCP_CREATE_ON_ALL_DEVICES);     
         }
 
-        if (name == "Multi device memory hint")
+        if (name == "Auto hardware buffer management")
         {
-            if (value == "Use minimum system memory")
-                mAutoHardwareBufferManagement = false;
-            else if (value == "Auto hardware buffers management")
-                mAutoHardwareBufferManagement = true;
+            StringConverter::parse(value, mAutoHardwareBufferManagement);
         }       
 
         if (name == "Fixed Pipeline Enabled")
@@ -850,14 +838,11 @@ namespace Ogre
         rsc->setNumTextureUnits(OGRE_MAX_TEXTURE_LAYERS);
         rsc->setNumVertexAttributes(14); // see D3DDECLUSAGE
         rsc->setCapability(RSC_ANISOTROPY);
-        rsc->setCapability(RSC_DOT3);
-        rsc->setCapability(RSC_SCISSOR_TEST);       
         rsc->setCapability(RSC_TWO_SIDED_STENCIL);      
         rsc->setCapability(RSC_STENCIL_WRAP);
         rsc->setCapability(RSC_HWOCCLUSION);        
         rsc->setCapability(RSC_USER_CLIP_PLANES);           
-        rsc->setCapability(RSC_32BIT_INDEX);            
-        rsc->setCapability(RSC_VERTEX_FORMAT_UBYTE4);           
+        rsc->setCapability(RSC_32BIT_INDEX);
         rsc->setCapability(RSC_TEXTURE_1D);         
         rsc->setCapability(RSC_TEXTURE_3D);         
         rsc->setCapability(RSC_NON_POWER_OF_2_TEXTURES);
@@ -871,7 +856,6 @@ namespace Ogre
         rsc->setCapability(RSC_PERSTAGECONSTANT);
         rsc->setCapability(RSC_HWSTENCIL);
         rsc->setStencilBufferBitDepth(8);
-        rsc->setCapability(RSC_ADVANCED_BLEND_OPERATIONS);
         rsc->setCapability(RSC_RTT_MAIN_DEPTHBUFFER_ATTACHABLE);
         rsc->setCapability(RSC_RTT_DEPTHBUFFER_RESOLUTION_LESSEQUAL);
         rsc->setCapability(RSC_VERTEX_BUFFER_INSTANCE_DATA);
@@ -929,11 +913,11 @@ namespace Ogre
 
             // Check Dot product 3.
             if ((rkCurCaps.TextureOpCaps & D3DTEXOPCAPS_DOTPRODUCT3) == 0)
-                rsc->unsetCapability(RSC_DOT3);
+                has_level_9_1 = false;
 
             // Scissor test
             if ((rkCurCaps.RasterCaps & D3DPRASTERCAPS_SCISSORTEST) == 0)
-                rsc->unsetCapability(RSC_SCISSOR_TEST);
+                has_level_9_1 = false;
 
             if ((rkCurCaps.RasterCaps & (D3DPRASTERCAPS_DEPTHBIAS | D3DPRASTERCAPS_SLOPESCALEDEPTHBIAS)) == 0)
                 has_level_9_1 = false;
@@ -957,7 +941,7 @@ namespace Ogre
 
             // UBYTE4 type?
             if ((rkCurCaps.DeclTypes & D3DDTCAPS_UBYTE4) == 0)          
-                rsc->unsetCapability(RSC_VERTEX_FORMAT_UBYTE4); 
+                has_level_9_1 = false;
 
             // Check cube map support.
             if ((rkCurCaps.TextureCaps & D3DPTEXTURECAPS_CUBEMAP) == 0)
@@ -1016,7 +1000,7 @@ namespace Ogre
 
             // Advanced blend operations? min max subtract rev 
             if((rkCurCaps.PrimitiveMiscCaps & D3DPMISCCAPS_BLENDOP) == 0)
-                rsc->unsetCapability(RSC_ADVANCED_BLEND_OPERATIONS);
+                has_level_9_1 = false;
 
             // see https://technet.microsoft.com/en-us/evalcenter/jj841213(v=vs.90)
             if (!has_level_9_1)
@@ -1053,15 +1037,6 @@ namespace Ogre
             break;
         };
 
-        // Infinite projection?
-        // We have no capability for this, so we have to base this on our
-        // experience and reports from users
-        // Non-vertex program capable hardware does not appear to support it
-        if (rsc->hasCapability(RSC_VERTEX_PROGRAM))
-        {
-            rsc->setCapability(RSC_INFINITE_FAR_PLANE);
-        }
-    
         // We always support rendertextures bigger than the frame buffer
         rsc->setCapability(RSC_HWRENDER_TO_TEXTURE);
 
@@ -1357,7 +1332,6 @@ namespace Ogre
                 rsc->addShaderProfile("ps_1_2");
 
             rsc->addShaderProfile("ps_1_1");
-            rsc->setCapability(RSC_FRAGMENT_PROGRAM);
         }
     }
     //-----------------------------------------------------------------------
@@ -1399,8 +1373,19 @@ namespace Ogre
                 "Trying to initialize D3D9RenderSystem from RenderSystemCapabilities that do not support Direct3D9",
                 "D3D9RenderSystem::initialiseFromRenderSystemCapabilities");
         }
-        if (caps->isShaderProfileSupported("hlsl"))
-            HighLevelGpuProgramManager::getSingleton().addFactory(mHLSLProgramFactory);
+
+        for(const auto& lang : caps->getSupportedShaderProfiles())
+        {
+            if (lang == "hlsl")
+            {
+                GpuProgramManager::getSingleton().addFactory(mHLSLProgramFactory);
+            }
+            else
+            {
+                D3D9GpuProgramManager::currentLanguage = lang;
+                GpuProgramManager::getSingleton().addFactory(mGpuProgramManager);
+            }
+        }
     }
 
     //-----------------------------------------------------------------------
@@ -1508,11 +1493,6 @@ namespace Ogre
     {
         const String errMsg = DXGetErrorDescription( errorNumber );
         return errMsg;
-    }
-    //---------------------------------------------------------------------
-    VertexElementType D3D9RenderSystem::getColourVertexElementType() const
-    {
-        return VET_COLOUR_ARGB;
     }
     //---------------------------------------------------------------------
     void D3D9RenderSystem::_convertProjectionMatrix(const Matrix4& matrix,
@@ -2313,7 +2293,7 @@ namespace Ogre
         if( enabled )
         {
             // If we have 16bit depth buffer enable w-buffering.
-            if((mActiveRenderTarget->getColourDepth() == 16) && mCurrentCapabilities->hasCapability(RSC_WBUFFER) )
+            if((mActiveRenderTarget->suggestPixelFormat() == PF_R5G6B5) && mCurrentCapabilities->hasCapability(RSC_WBUFFER) )
                 hr = __SetRenderState( D3DRS_ZENABLE, D3DZB_USEW );
             else
                 hr = __SetRenderState( D3DRS_ZENABLE, D3DZB_TRUE );
@@ -2450,29 +2430,22 @@ namespace Ogre
             OGRE_EXCEPT(Exception::ERR_RENDERINGAPI_ERROR, "Error setting polygon mode.", "D3D9RenderSystem::setPolygonMode");
     }
     //---------------------------------------------------------------------
-    void D3D9RenderSystem::setStencilCheckEnabled(bool enabled)
-    {
-        // Allow stencilling
-        HRESULT hr = __SetRenderState(D3DRS_STENCILENABLE, enabled);
-        if (FAILED(hr))
-            OGRE_EXCEPT(Exception::ERR_RENDERINGAPI_ERROR, "Error enabling / disabling stencilling.",
-            "D3D9RenderSystem::setStencilCheckEnabled");
-    }
-    //---------------------------------------------------------------------
-    void D3D9RenderSystem::setStencilBufferParams(CompareFunction func, 
-        uint32 refValue, uint32 compareMask, uint32 writeMask, StencilOperation stencilFailOp, 
-        StencilOperation depthFailOp, StencilOperation passOp, 
-        bool twoSidedOperation, bool readBackAsTexture)
+    void D3D9RenderSystem::setStencilState(const StencilState& state)
     {
         HRESULT hr;
         bool flip;
 
+        // Allow stencilling
+        hr = __SetRenderState(D3DRS_STENCILENABLE, state.enabled);
+        if (FAILED(hr))
+            OGRE_EXCEPT(Exception::ERR_RENDERINGAPI_ERROR, "Error enabling / disabling stencilling.");
+
+        if(!state.enabled)
+            return;
+
         // 2-sided operation
-        if (twoSidedOperation)
+        if (state.twoSidedOperation)
         {
-            if (!mCurrentCapabilities->hasCapability(RSC_TWO_SIDED_STENCIL))
-                OGRE_EXCEPT(Exception::ERR_INVALIDPARAMS, "2-sided stencils are not supported",
-                "D3D9RenderSystem::setStencilBufferParams");
             hr = __SetRenderState(D3DRS_TWOSIDEDSTENCILMODE, TRUE);
             if (FAILED(hr))
                 OGRE_EXCEPT(Exception::ERR_RENDERINGAPI_ERROR, "Error setting 2-sided stencil mode.",
@@ -2484,19 +2457,19 @@ namespace Ogre
 
             // Set alternative versions of ops
             // fail op
-            hr = __SetRenderState(D3DRS_CCW_STENCILFAIL, D3D9Mappings::get(stencilFailOp, !flip));
+            hr = __SetRenderState(D3DRS_CCW_STENCILFAIL, D3D9Mappings::get(state.stencilFailOp, !flip));
             if (FAILED(hr))
                 OGRE_EXCEPT(Exception::ERR_RENDERINGAPI_ERROR, "Error setting stencil fail operation (2-sided).",
                 "D3D9RenderSystem::setStencilBufferParams");
 
             // depth fail op
-            hr = __SetRenderState(D3DRS_CCW_STENCILZFAIL, D3D9Mappings::get(depthFailOp, !flip));
+            hr = __SetRenderState(D3DRS_CCW_STENCILZFAIL, D3D9Mappings::get(state.depthFailOp, !flip));
             if (FAILED(hr))
                 OGRE_EXCEPT(Exception::ERR_RENDERINGAPI_ERROR, "Error setting stencil depth fail operation (2-sided).",
                 "D3D9RenderSystem::setStencilBufferParams");
 
             // pass op
-            hr = __SetRenderState(D3DRS_CCW_STENCILPASS, D3D9Mappings::get(passOp, !flip));
+            hr = __SetRenderState(D3DRS_CCW_STENCILPASS, D3D9Mappings::get(state.depthStencilPassOp, !flip));
             if (FAILED(hr))
                 OGRE_EXCEPT(Exception::ERR_RENDERINGAPI_ERROR, "Error setting stencil pass operation (2-sided).",
                 "D3D9RenderSystem::setStencilBufferParams");
@@ -2511,43 +2484,43 @@ namespace Ogre
         }
 
         // func
-        hr = __SetRenderState(D3DRS_STENCILFUNC, D3D9Mappings::get(func));
+        hr = __SetRenderState(D3DRS_STENCILFUNC, D3D9Mappings::get(state.compareOp));
         if (FAILED(hr))
             OGRE_EXCEPT(Exception::ERR_RENDERINGAPI_ERROR, "Error setting stencil buffer test function.",
             "D3D9RenderSystem::setStencilBufferParams");
 
         // reference value
-        hr = __SetRenderState(D3DRS_STENCILREF, refValue);
+        hr = __SetRenderState(D3DRS_STENCILREF, state.referenceValue);
         if (FAILED(hr))
             OGRE_EXCEPT(Exception::ERR_RENDERINGAPI_ERROR, "Error setting stencil buffer reference value.",
             "D3D9RenderSystem::setStencilBufferParams");
 
         // compare mask
-        hr = __SetRenderState(D3DRS_STENCILMASK, compareMask);
+        hr = __SetRenderState(D3DRS_STENCILMASK, state.compareMask);
         if (FAILED(hr))
             OGRE_EXCEPT(Exception::ERR_RENDERINGAPI_ERROR, "Error setting stencil buffer compare mask.",
             "D3D9RenderSystem::setStencilBufferParams");
 
         // compare mask
-        hr = __SetRenderState(D3DRS_STENCILWRITEMASK, writeMask);
+        hr = __SetRenderState(D3DRS_STENCILWRITEMASK, state.writeMask);
         if (FAILED(hr))
             OGRE_EXCEPT(Exception::ERR_RENDERINGAPI_ERROR, "Error setting stencil buffer write mask.",
             "D3D9RenderSystem::setStencilBufferParams");
 
         // fail op
-        hr = __SetRenderState(D3DRS_STENCILFAIL, D3D9Mappings::get(stencilFailOp, flip));
+        hr = __SetRenderState(D3DRS_STENCILFAIL, D3D9Mappings::get(state.stencilFailOp, flip));
         if (FAILED(hr))
             OGRE_EXCEPT(Exception::ERR_RENDERINGAPI_ERROR, "Error setting stencil fail operation.",
             "D3D9RenderSystem::setStencilBufferParams");
 
         // depth fail op
-        hr = __SetRenderState(D3DRS_STENCILZFAIL, D3D9Mappings::get(depthFailOp, flip));
+        hr = __SetRenderState(D3DRS_STENCILZFAIL, D3D9Mappings::get(state.depthFailOp, flip));
         if (FAILED(hr))
             OGRE_EXCEPT(Exception::ERR_RENDERINGAPI_ERROR, "Error setting stencil depth fail operation.",
             "D3D9RenderSystem::setStencilBufferParams");
 
         // pass op
-        hr = __SetRenderState(D3DRS_STENCILPASS, D3D9Mappings::get(passOp, flip));
+        hr = __SetRenderState(D3DRS_STENCILPASS, D3D9Mappings::get(state.depthStencilPassOp, flip));
         if (FAILED(hr))
             OGRE_EXCEPT(Exception::ERR_RENDERINGAPI_ERROR, "Error setting stencil pass operation.",
             "D3D9RenderSystem::setStencilBufferParams");
@@ -3390,15 +3363,14 @@ namespace Ogre
         }
 
         HRESULT hr;
-        GpuLogicalBufferStructPtr floatLogical = params->getFloatLogicalBufferStruct();
-        GpuLogicalBufferStructPtr intLogical = params->getIntLogicalBufferStruct();
+        GpuLogicalBufferStructPtr floatLogical = params->getLogicalBufferStruct();
 
         switch(gptype)
         {
         case GPT_VERTEX_PROGRAM:
             mActiveVertexGpuProgramParameters = params;
             {
-                            OGRE_LOCK_MUTEX(floatLogical->mutex);
+                    OGRE_LOCK_MUTEX(floatLogical->mutex);
 
                     for (GpuLogicalIndexUseMap::const_iterator i = floatLogical->map.begin();
                         i != floatLogical->map.end(); ++i)
@@ -3406,50 +3378,32 @@ namespace Ogre
                         if (i->second.variability & variability)
                         {
                             size_t logicalIndex = i->first;
-                            const float* pFloat = params->getFloatPointer(i->second.physicalIndex);
                             size_t slotCount = i->second.currentSize / 4;
                             assert (i->second.currentSize % 4 == 0 && "Should not have any "
                                 "elements less than 4 wide for D3D9");
 
-                        if (FAILED(hr = getActiveD3D9Device()->SetVertexShaderConstantF(
-                            (UINT)logicalIndex, pFloat, (UINT)slotCount)))
+                            if(i->second.baseType == BCT_FLOAT)
                             {
-                                OGRE_EXCEPT(Exception::ERR_RENDERINGAPI_ERROR, 
-                                    "Unable to upload vertex shader float parameters", 
-                                    "D3D9RenderSystem::bindGpuProgramParameters");
+                                const float* pFloat = params->getFloatPointer(i->second.physicalIndex);
+                                hr = getActiveD3D9Device()->SetVertexShaderConstantF(
+                                    (UINT)logicalIndex, pFloat, (UINT)slotCount);
+                            }
+                            else
+                            {
+                                const int* pInt = params->getIntPointer(i->second.physicalIndex);
+                                hr = getActiveD3D9Device()->SetVertexShaderConstantI(
+                                        static_cast<UINT>(logicalIndex), pInt, static_cast<UINT>(slotCount));
+                            }
+
+                            if (FAILED(hr))
+                            {
+                                OGRE_EXCEPT(Exception::ERR_RENDERINGAPI_ERROR,
+                                            "Unable to upload vertex shader parameters");
                             }
                         }
 
                     }
-
             }
-            // bind ints
-            {
-                            OGRE_LOCK_MUTEX(intLogical->mutex);
-
-                    for (GpuLogicalIndexUseMap::const_iterator i = intLogical->map.begin();
-                        i != intLogical->map.end(); ++i)
-                    {
-                        if (i->second.variability & variability)
-                        {
-                            size_t logicalIndex = i->first;
-                            const int* pInt = params->getIntPointer(i->second.physicalIndex);
-                            size_t slotCount = i->second.currentSize / 4;
-                            assert (i->second.currentSize % 4 == 0 && "Should not have any "
-                                "elements less than 4 wide for D3D9");
-
-                        if (FAILED(hr = getActiveD3D9Device()->SetVertexShaderConstantI(
-                            static_cast<UINT>(logicalIndex), pInt, static_cast<UINT>(slotCount))))
-                            {
-                                OGRE_EXCEPT(Exception::ERR_RENDERINGAPI_ERROR, 
-                                    "Unable to upload vertex shader int parameters", 
-                                    "D3D9RenderSystem::bindGpuProgramParameters");
-                            }
-                        }
-                    }
-
-            }
-
             break;
         case GPT_FRAGMENT_PROGRAM:
             mActiveFragmentGpuProgramParameters = params;
@@ -3462,46 +3416,29 @@ namespace Ogre
                         if (i->second.variability & variability)
                         {
                             size_t logicalIndex = i->first;
-                            const float* pFloat = params->getFloatPointer(i->second.physicalIndex);
                             size_t slotCount = i->second.currentSize / 4;
                             assert (i->second.currentSize % 4 == 0 && "Should not have any "
                                 "elements less than 4 wide for D3D9");
 
-                        if (FAILED(hr = getActiveD3D9Device()->SetPixelShaderConstantF(
-                            static_cast<UINT>(logicalIndex), pFloat, static_cast<UINT>(slotCount))))
+                            if(i->second.baseType == BCT_FLOAT)
                             {
-                                OGRE_EXCEPT(Exception::ERR_RENDERINGAPI_ERROR, 
-                                    "Unable to upload pixel shader float parameters", 
-                                    "D3D9RenderSystem::bindGpuProgramParameters");
+                                const float* pFloat = params->getFloatPointer(i->second.physicalIndex);
+                                hr = getActiveD3D9Device()->SetPixelShaderConstantF(
+                                    (UINT)logicalIndex, pFloat, (UINT)slotCount);
+                            }
+                            else
+                            {
+                                const int* pInt = params->getIntPointer(i->second.physicalIndex);
+                                hr = getActiveD3D9Device()->SetPixelShaderConstantI(
+                                        static_cast<UINT>(logicalIndex), pInt, static_cast<UINT>(slotCount));
+                            }
+
+                            if (FAILED(hr))
+                            {
+                                OGRE_EXCEPT(Exception::ERR_RENDERINGAPI_ERROR,
+                                            "Unable to upload pixel shader parameters");
                             }
                         }
-                    }
-
-            }
-            // bind ints
-            {
-                            OGRE_LOCK_MUTEX(intLogical->mutex);
-
-                    for (GpuLogicalIndexUseMap::const_iterator i = intLogical->map.begin();
-                        i != intLogical->map.end(); ++i)
-                    {
-                        if (i->second.variability & variability)
-                        {
-                            size_t logicalIndex = i->first;
-                            const int* pInt = params->getIntPointer(i->second.physicalIndex);
-                            size_t slotCount = i->second.currentSize / 4;
-                            assert (i->second.currentSize % 4 == 0 && "Should not have any "
-                                "elements less than 4 wide for D3D9");
-
-                        if (FAILED(hr = getActiveD3D9Device()->SetPixelShaderConstantI(
-                            static_cast<UINT>(logicalIndex), pInt, static_cast<UINT>(slotCount))))
-                            {
-                                OGRE_EXCEPT(Exception::ERR_RENDERINGAPI_ERROR, 
-                                    "Unable to upload pixel shader int parameters", 
-                                    "D3D9RenderSystem::bindGpuProgramParameters");
-                            }
-                        }
-
                     }
 
             }
@@ -3588,7 +3525,7 @@ namespace Ogre
     }
     //---------------------------------------------------------------------
     void D3D9RenderSystem::clearFrameBuffer(unsigned int buffers, 
-        const ColourValue& colour, Real depth, unsigned short stencil)
+        const ColourValue& colour, float depth, unsigned short stencil)
     {
         DWORD flags = 0;
         if (buffers & FBT_COLOUR)

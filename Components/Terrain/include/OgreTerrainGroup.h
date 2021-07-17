@@ -537,7 +537,7 @@ namespace Ogre
          */
         size_t getNumTerrainPrepareRequests() const;
 
-    protected:
+    private:
         typedef std::map<TerrainSlot*, WorkQueue::RequestID> TerrainPrepareRequestMap;
         SceneManager *mSceneManager;
         Terrain::Alignment mAlignment;
@@ -569,8 +569,6 @@ namespace Ogre
         {
             TerrainSlot* slot;
             TerrainGroup* origin;
-            OGRE_DEPRECATED _OgreTerrainExport friend std::ostream& operator<<(std::ostream& o, const LoadRequest& r)
-            { return o; }       
         };
         
 

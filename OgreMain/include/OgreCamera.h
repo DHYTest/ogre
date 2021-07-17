@@ -106,7 +106,7 @@ namespace Ogre {
                         { (void)cam; }
 
         };
-    protected:
+    private:
         /// Is viewing window used.
         bool mWindowSet;
         /// Was viewing window changed.
@@ -124,9 +124,6 @@ namespace Ogre {
         /// Derived orientation/position of the camera, including reflection
         mutable Quaternion mDerivedOrientation;
         mutable Vector3 mDerivedPosition;
-
-        /// Rendering type
-        PolygonMode mSceneDetail;
 
         /// Stored number of visible faces in the last render
         unsigned int mVisFacesLastRender;
@@ -174,13 +171,15 @@ namespace Ogre {
         Frustum *mCullFrustum;
         /// Camera to use for LOD calculation
         const Camera* mLodCamera;
-        /// @see Camera::getPixelDisplayRatio
-        Real mPixelDisplayRatio;
 
         typedef std::vector<Listener*> ListenerList;
         ListenerList mListeners;
+        /// @see Camera::getPixelDisplayRatio
+        Real mPixelDisplayRatio;
 
         SortMode mSortMode;
+        /// Rendering type
+        PolygonMode mSceneDetail;
 
         // Internal functions for calcs
         bool isViewOutOfDate(void) const;
@@ -449,7 +448,6 @@ namespace Ogre {
             rotation inherited from a node attachment. */
         Vector3 getRealRight(void) const;
 
-        void getWorldTransforms(Matrix4* mat) const override;
         const String& getMovableType(void) const override;
 
         /** Sets the level-of-detail factor for this Camera.

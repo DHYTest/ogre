@@ -40,7 +40,6 @@ namespace Ogre {
         mAutoAspectRatio(false),
         mUseRenderingDistance(true),
         mUseMinPixelSize(false),
-        mSceneDetail(PM_SOLID),
 #ifdef OGRE_NODELESS_POSITIONING
         mOrientation(Quaternion::IDENTITY),
         mPosition(Vector3::ZERO),
@@ -53,7 +52,8 @@ namespace Ogre {
         mCullFrustum(0),
         mLodCamera(0),
         mPixelDisplayRatio(0),
-        mSortMode(SM_DISTANCE)
+        mSortMode(SM_DISTANCE),
+        mSceneDetail(PM_SOLID)
     {
 
         // Reasonable defaults to camera params
@@ -645,20 +645,6 @@ namespace Ogre {
 #else
         return mLastParentOrientation.xAxis();
 #endif
-    }
-    //-----------------------------------------------------------------------
-    void Camera::getWorldTransforms(Matrix4* mat) const 
-    {
-        updateView();
-
-        Vector3 scale(1.0, 1.0, 1.0);
-        if (mParentNode)
-          scale = mParentNode->_getDerivedScale();
-
-        mat->makeTransform(
-                mDerivedPosition,
-                scale,
-                mDerivedOrientation);
     }
     //-----------------------------------------------------------------------
     const String& Camera::getMovableType(void) const

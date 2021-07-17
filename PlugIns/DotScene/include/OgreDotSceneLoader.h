@@ -6,7 +6,6 @@
 #include <OgreColourValue.h>
 #include <OgreQuaternion.h>
 #include <OgreResourceGroupManager.h>
-#include <OgreSceneLoader.h>
 #include <OgreString.h>
 #include <OgrePlugin.h>
 #include <OgreCodec.h>
@@ -22,7 +21,7 @@ namespace Ogre
 class SceneManager;
 class SceneNode;
 
-class _OgreDotScenePluginExport DotSceneLoader : public Ogre::SceneLoader
+class _OgreDotScenePluginExport DotSceneLoader
 {
 public:
     DotSceneLoader();
@@ -30,9 +29,12 @@ public:
 
     void load(Ogre::DataStreamPtr& stream, const Ogre::String& groupName, Ogre::SceneNode* rootNode);
 
+    void exportScene(SceneNode* rootNode, const String& outFileName);
+
     const Ogre::ColourValue& getBackgroundColour() { return mBackgroundColour; }
 
 protected:
+    void writeNode(pugi::xml_node& parentXML, const SceneNode* node);
     void processScene(pugi::xml_node& XMLRoot);
 
     void processNodes(pugi::xml_node& XMLNode);

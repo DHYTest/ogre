@@ -83,12 +83,14 @@
 
 <!ELEMENT entity (userData?)>
 <!ATTLIST entity
-    name            CDATA    #IMPLIED
-    id                ID        #IMPLIED
-    meshFile        CDATA    #REQUIRED
-    material        CDATA    #IMPLIED
-    static            (true | false) "false"
-    castShadows        (true | false) "true"
+    name		CDATA	#IMPLIED
+    id			ID		#IMPLIED
+    visible		(true | false) "true"
+    meshFile	CDATA	#REQUIRED
+    material	CDATA	#IMPLIED
+	static		CDATA	#IMPLIED
+	instanced	CDATA	#IMPLIED
+    castShadows	(true | false) "true"
 >
 
 <!ELEMENT environment (fog?, skyBox?, skyDome?, skyPlane?, colourAmbient?, colourBackground?)>
@@ -281,8 +283,8 @@
 
 <!ELEMENT animation (keyframe+)>
 <!ATTLIST animation
-    name    PCDATA          #REQUIRED
-    length  PCDATA          #REQUIRED
+    name    CDATA          #REQUIRED
+    length  CDATA          #REQUIRED
     enable  (true | false)  "false"
     loop    (true | false)  "false"
     interpolationMode           (linear | spline)       "linear"
@@ -291,5 +293,5 @@
 
 <!ELEMENT keyframe (translation?, rotation?, scale?)>
 <!ATTLIST keyframe
-    time    PCDATA  #REQUIRED
+    time    CDATA  #REQUIRED
 >

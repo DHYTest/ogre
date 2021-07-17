@@ -155,7 +155,6 @@ void ProgramManager::createDefaultProgramProcessors()
 {
     // Add standard shader processors
 #if OGRE_PLATFORM != OGRE_PLATFORM_ANDROID
-    mDefaultProgramProcessors.push_back(OGRE_NEW CGProgramProcessor);
     mDefaultProgramProcessors.push_back(OGRE_NEW GLSLProgramProcessor);
     mDefaultProgramProcessors.push_back(OGRE_NEW HLSLProgramProcessor);
 #endif
@@ -268,7 +267,7 @@ GpuProgramPtr ProgramManager::createGpuProgram(Program* shaderProgram,
                                                const String& profiles,
                                                const String& cachePath)
 {
-    stringstream sourceCodeStringStream;
+    std::stringstream sourceCodeStringStream;
 
     // Generate source code.
     programWriter->writeSourceCode(sourceCodeStringStream, shaderProgram);
@@ -331,8 +330,8 @@ GpuProgramPtr ProgramManager::createGpuProgram(Program* shaderProgram,
     }
 
     pGpuProgram->setSource(source);
-    pGpuProgram->setPreprocessorDefines(shaderProgram->getPreprocessorDefines());
-    pGpuProgram->setParameter("entry_point", shaderProgram->getEntryPointFunction()->getName());
+    pGpuProgram->setParameter("preprocessor_defines", shaderProgram->getPreprocessorDefines());
+    pGpuProgram->setParameter("entry_point", "main");
 
     if (language == "hlsl")
     {
@@ -425,7 +424,6 @@ void ProgramManager::synchronizePixelnToBeVertexOut( ProgramSet* programSet )
     Program* psProgram = programSet->getCpuProgram(GPT_FRAGMENT_PROGRAM);
 
     // first find the vertex shader
-    ShaderFunctionConstIterator itFunction ;
     Function* vertexMain = vsProgram->getEntryPointFunction();
     Function* pixelMain = psProgram->getEntryPointFunction();;
 

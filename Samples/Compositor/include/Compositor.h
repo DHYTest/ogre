@@ -178,9 +178,9 @@ void Sample_Compositor::registerCompositors(void)
         {
             Ogre::CompositorManager::getSingleton().addCompositor(vp, compositorName, addPosition);
             Ogre::CompositorManager::getSingleton().setCompositorEnabled(vp, compositorName, false);
-        } catch (...) {
+        } catch (Ogre::Exception& e) {
             /// Warn user
-            LogManager::getSingleton().logMessage("Could not load compositor " + compositorName, LML_CRITICAL);
+            LogManager::getSingleton().logMessage(e.getDescription(), LML_CRITICAL);
         }
     }
 
@@ -402,8 +402,7 @@ void Sample_Compositor::setupScene(void)
     // Set ambient light
     mSceneMgr->setAmbientLight(Ogre::ColourValue(0.3, 0.3, 0.2));
 
-    Ogre::Light* l = mSceneMgr->createLight("Light2");
-    l->setType(Ogre::Light::LT_DIRECTIONAL);
+    Ogre::Light* l = mSceneMgr->createLight(Light::LT_DIRECTIONAL);
     l->setDiffuseColour(1, 1, 0.8);
     l->setSpecularColour(1, 1, 1);
 

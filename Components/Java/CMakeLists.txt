@@ -27,7 +27,7 @@ else()
 	endif()
 endif()
 
-set(CMAKE_SWIG_FLAGS -w401,314 -package org.ogre)
+set(CMAKE_SWIG_FLAGS -w401,314 -package org.ogre -Dfinal)
 
 if (APPLE AND NOT ANDROID)
 	# we are using libc++ on OSX
@@ -62,8 +62,10 @@ if(OGRE_BUILD_COMPONENT_OVERLAY)
 endif()
 
 if(OGRE_BUILD_COMPONENT_OVERLAY_IMGUI)
-    include_directories("${IMGUI_DIR}")
-    list(APPEND CMAKE_SWIG_FLAGS -DHAVE_IMGUI -DIMGUI_DISABLE_OBSOLETE_FUNCTIONS)
+	include_directories("${IMGUI_DIR}")
+	list(APPEND CMAKE_SWIG_FLAGS -DHAVE_IMGUI -DIMGUI_DISABLE_OBSOLETE_FUNCTIONS)
+    set_source_files_properties(../Overlay/include/ImGui.i PROPERTIES CPLUSPLUS ON)
+    list(APPEND SWIG_INPUT_MODULE ../Overlay/include/ImGui.i)
 endif()
 
 if(OGRE_BUILD_COMPONENT_BITES)
@@ -77,7 +79,7 @@ if(OGRE_BUILD_COMPONENT_BITES)
 endif()
 
 set(CMAKE_WARN_DEPRECATED OFF)
-swig_add_module(OgreJNI java ${SWIG_INPUT_MODULES})
+swig_add_library(OgreJNI LANGUAGE java SOURCES ${SWIG_INPUT_MODULES})
 swig_link_libraries(OgreJNI OgreBites OgreOverlay OgreRTShaderSystem OgreTerrain OgreMain ${JNI_LIBRARIES})
 
 if(${Java_FOUND})

@@ -1,6 +1,5 @@
 #include <Ogre.h>
 #include <OgreDotSceneLoader.h>
-#include <OgreSceneLoaderManager.h>
 #include <OgreComponents.h>
 
 #ifdef OGRE_BUILD_COMPONENT_TERRAIN
@@ -120,6 +119,12 @@ struct DotSceneCodec : public Codec
         DotSceneLoader loader;
         loader.load(_stream, ResourceGroupManager::getSingleton().getWorldResourceGroupName(),
                     any_cast<SceneNode*>(output));
+    }
+
+    void encodeToFile(const Any& input, const String& outFileName) const override
+    {
+        DotSceneLoader loader;
+        loader.exportScene(any_cast<SceneNode*>(input), outFileName);
     }
 };
 
@@ -599,18 +604,56 @@ void DotSceneLoader::processEntity(pugi::xml_node& XMLNode, SceneNode* pParent)
     LogManager::getSingleton().logMessage("[DotSceneLoader] Processing Entity: " + name, LML_TRIVIAL);
 
     String meshFile = getAttrib(XMLNode, "meshFile");
+	String staticGeometry = getAttrib(XMLNode, "static");
+	String instancedManager = getAttrib(XMLNode, "instanced");
+	String material = getAttrib(XMLNode, "material");
     bool castShadows = getAttribBool(XMLNode, "castShadows", true);
+    bool visible = getAttribBool(XMLNode, "visible", true);
 
     // Create the entity
-    Entity* pEntity = 0;
+	MovableObject* pEntity = 0;
+
     try
     {
-        pEntity = mSceneMgr->createEntity(name, meshFile, m_sGroupName);
-        pEntity->setCastShadows(castShadows);
-        pParent->attachObject(pEntity);
+		// If the Entity is instanced then the creation path is different
+		if (!instancedManager.empty())
+		{
+			LogManager::getSingleton().logMessage("[DotSceneLoader] Adding entity: " + name + " to Instance Manager: " + instancedManager, LML_TRIVIAL);
 
-        if (auto material = XMLNode.attribute("material"))
-            pEntity->setMaterialName(material.value());
+			// Load the Mesh to get the material name of the first submesh
+			Ogre::MeshPtr mesh = MeshManager::getSingletonPtr()->load(meshFile, m_sGroupName);
+
+			// Get the material name of the entity
+			if(!material.empty())
+				pEntity = mSceneMgr->createInstancedEntity(material, instancedManager);
+			else
+				pEntity = mSceneMgr->createInstancedEntity(mesh->getSubMesh(0)->getMaterialName(), instancedManager);
+
+			pParent->attachObject(static_cast<InstancedEntity*>(pEntity));
+		}
+		else
+		{
+			pEntity = mSceneMgr->createEntity(name, meshFile, m_sGroupName);
+
+			static_cast<Entity*>(pEntity)->setCastShadows(castShadows);
+			static_cast<Entity*>(pEntity)->setVisible(visible);
+
+			if (!material.empty())
+				static_cast<Entity*>(pEntity)->setMaterialName(material);
+
+			// If the Entity belongs to a Static Geometry group then it doesn't get attached to a node
+			// * TODO * : Clean up nodes without attached entities or children nodes? (should be done afterwards if the hierarchy is being processed)
+			if (!staticGeometry.empty())
+			{
+				LogManager::getSingleton().logMessage("[DotSceneLoader] Adding entity: " + name + " to Static Group: " + staticGeometry, LML_TRIVIAL);
+				mSceneMgr->getStaticGeometry(staticGeometry)->addEntity(static_cast<Entity*>(pEntity), pParent->_getDerivedPosition(), pParent->_getDerivedOrientation(), pParent->_getDerivedScale());
+			}
+			else
+			{
+				LogManager::getSingleton().logMessage("[DotSceneLoader] pParent->attachObject(): " + name, LML_TRIVIAL);
+				pParent->attachObject(static_cast<Entity*>(pEntity));
+			}
+		}
     }
     catch (const Exception& e)
     {
@@ -915,6 +958,146 @@ void DotSceneLoader::processKeyframe(pugi::xml_node& XMLNode, NodeAnimationTrack
         Vector3 scale = parseVector3(pElement);
         keyframe->setScale(scale);
     }
+}
+
+void DotSceneLoader::exportScene(SceneNode* rootNode, const String& outFileName)
+{
+    pugi::xml_document XMLDoc; // character type defaults to char
+    auto comment = XMLDoc.append_child(pugi::node_comment);
+    comment.set_value(StringUtil::format(" exporter: Plugin_DotScene %d.%d.%d ", OGRE_VERSION_MAJOR,
+                                         OGRE_VERSION_MINOR, OGRE_VERSION_PATCH)
+                          .c_str());
+    auto scene = XMLDoc.append_child("scene");
+    scene.append_attribute("formatVersion") = "1.1";
+    scene.append_attribute("sceneManager") = rootNode->getCreator()->getTypeName().c_str();
+
+    auto nodes = scene.append_child("nodes");
+
+    for(auto c : rootNode->getChildren())
+        writeNode(nodes, static_cast<SceneNode*>(c));
+
+    //writeNode(nodes, rootNode);
+
+    XMLDoc.save_file(outFileName.c_str());
+}
+
+static void write(pugi::xml_node& node, const Vector3& v)
+{
+    node.append_attribute("x") = StringConverter::toString(v.x).c_str();
+    node.append_attribute("y") = StringConverter::toString(v.y).c_str();
+    node.append_attribute("z") = StringConverter::toString(v.z).c_str();
+}
+
+static void write(pugi::xml_node& node, const ColourValue& c)
+{
+    node.append_attribute("r") = StringConverter::toString(c.r).c_str();
+    node.append_attribute("g") = StringConverter::toString(c.g).c_str();
+    node.append_attribute("b") = StringConverter::toString(c.b).c_str();
+    node.append_attribute("a") = StringConverter::toString(c.a).c_str();
+}
+
+void DotSceneLoader::writeNode(pugi::xml_node& parentXML, const SceneNode* n)
+{
+    auto nodeXML = parentXML.append_child("node");
+    if(!n->getName().empty())
+        nodeXML.append_attribute("name") = n->getName().c_str();
+
+    auto pos = nodeXML.append_child("position");
+    write(pos, n->getPosition());
+
+    auto scale = nodeXML.append_child("scale");
+    write(scale, n->getScale());
+
+    auto rot = nodeXML.append_child("rotation");
+    rot.append_attribute("qw") = StringConverter::toString(n->getOrientation().w).c_str();
+    rot.append_attribute("qx") = StringConverter::toString(n->getOrientation().x).c_str();
+    rot.append_attribute("qy") = StringConverter::toString(n->getOrientation().y).c_str();
+    rot.append_attribute("qz") = StringConverter::toString(n->getOrientation().z).c_str();
+
+    for(auto mo : n->getAttachedObjects())
+    {
+        if(auto c = dynamic_cast<Camera*>(mo))
+        {
+            auto camera = nodeXML.append_child("camera");
+            camera.append_attribute("name") = c->getName().c_str();
+            auto clipping = camera.append_child("clipping");
+            clipping.append_attribute("near") = StringConverter::toString(c->getNearClipDistance()).c_str();
+            clipping.append_attribute("far") = StringConverter::toString(c->getFarClipDistance()).c_str();
+            continue;
+        }
+
+        if (auto l = dynamic_cast<Light*>(mo))
+        {
+            auto light = nodeXML.append_child("light");
+            light.append_attribute("name") = l->getName().c_str();
+            light.append_attribute("castShadows") = StringConverter::toString(l->getCastShadows()).c_str();
+
+            if(!l->isVisible())
+                light.append_attribute("visible") = "false";
+
+            auto diffuse = light.append_child("colourDiffuse");
+            write(diffuse, l->getDiffuseColour());
+            auto specular = light.append_child("colourSpecular");
+            write(specular, l->getSpecularColour());
+            switch (l->getType())
+            {
+            case Light::LT_POINT:
+                light.append_attribute("type") = "point";
+                break;
+            case Light::LT_DIRECTIONAL:
+                light.append_attribute("type") = "directional";
+                break;
+            case Light::LT_SPOTLIGHT:
+                light.append_attribute("type") = "spot";
+                break;
+            }
+
+            if(l->getType() != Light::LT_DIRECTIONAL)
+            {
+                auto range = light.append_child("lightRange");
+                range.append_attribute("inner") =
+                    StringConverter::toString(l->getSpotlightInnerAngle()).c_str();
+                range.append_attribute("outer") =
+                    StringConverter::toString(l->getSpotlightOuterAngle()).c_str();
+                range.append_attribute("falloff") =
+                    StringConverter::toString(l->getSpotlightFalloff()).c_str();
+                auto atten = light.append_child("lightAttenuation");
+                atten.append_attribute("range") =
+                    StringConverter::toString(l->getAttenuationRange()).c_str();
+                atten.append_attribute("constant") =
+                    StringConverter::toString(l->getAttenuationConstant()).c_str();
+                atten.append_attribute("linear") =
+                    StringConverter::toString(l->getAttenuationLinear()).c_str();
+                atten.append_attribute("quadratic") =
+                    StringConverter::toString(l->getAttenuationQuadric()).c_str();
+            }
+
+            continue;
+        }
+
+        if(auto e = dynamic_cast<Entity*>(mo))
+        {
+            auto entity = nodeXML.append_child("entity");
+            entity.append_attribute("name") = e->getName().c_str();
+            entity.append_attribute("meshFile") = e->getMesh()->getName().c_str();
+
+            if(!e->isVisible())
+                entity.append_attribute("visible") = "false";
+
+            // Heuristic: assume first submesh is representative
+            auto sub0mat = e->getSubEntity(0)->getMaterial();
+            if(sub0mat != e->getMesh()->getSubMesh(0)->getMaterial())
+                entity.append_attribute("material") = sub0mat->getName().c_str();
+            continue;
+        }
+
+        LogManager::getSingleton().logWarning("DotSceneLoader - unsupported MovableType " +
+                                            mo->getMovableType());
+    }
+
+    // recurse
+    for(auto c : n->getChildren())
+        writeNode(nodeXML, static_cast<SceneNode*>(c));
 }
 
 const Ogre::String& DotScenePlugin::getName() const {

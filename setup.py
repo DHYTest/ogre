@@ -13,7 +13,8 @@ class EmptyListWithLength(list):
 
 def cmake_process_manifest_hook(cmake_manifest):
     return [name for name in cmake_manifest
-            if os.path.splitext(name)[1] not in (".a", ".h", ".i", ".pc", ".cmake", ".lib") or "Media/" in name]
+            if os.path.splitext(name)[1] not in (".a", ".h", ".i", ".pc", ".cmake", ".lib")
+            or "media/" in name.replace("\\", "/").lower()]
 
 def main():
     os.chdir(os.path.dirname(os.path.abspath(__file__)))
@@ -50,8 +51,6 @@ def main():
         "-DOGRE_BUILD_PLUGIN_PCZ=OFF",
         # not yet wrapped components
         "-DOGRE_BUILD_COMPONENT_MESHLODGENERATOR=OFF",
-        "-DOGRE_BUILD_COMPONENT_PAGING=OFF",
-        "-DOGRE_BUILD_COMPONENT_TERRAIN=OFF",
         "-DOGRE_BUILD_COMPONENT_VOLUME=OFF"
     ]
 

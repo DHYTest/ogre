@@ -34,6 +34,9 @@ THE SOFTWARE.
 #include "Threading/OgreThreadHeaders.h"
 #include "OgreHeaderPrefix.h"
 
+#include <fstream>
+#include <sstream>
+
 namespace Ogre {
 
     /** \addtogroup Core
@@ -42,11 +45,8 @@ namespace Ogre {
     /** \addtogroup General
     *  @{
     */
-    // LogMessageLevel + LoggingLevel > OGRE_LOG_THRESHOLD = message logged
-    #define OGRE_LOG_THRESHOLD 4
 
-    /** The level of detail to which the log will go into.
-    */
+    /// @deprecated use LogMessageLevel instead
     enum LoggingLevel
     {
         LL_LOW = 1,
@@ -97,9 +97,9 @@ namespace Ogre {
     */
     class _OgreExport Log : public LogAlloc
     {
-    protected:
+    private:
         std::ofstream   mLog;
-        LoggingLevel    mLogLevel;
+        LogMessageLevel mLogLevel;
         bool            mDebugOut;
         bool            mSuppressFile;
         bool            mTimeStamp;
@@ -158,7 +158,7 @@ namespace Ogre {
         void setTimeStampEnabled(bool timeStamp);
         /** Gets the level of the log detail.
         */
-        LoggingLevel getLogDetail() const { return mLogLevel; }
+        LogMessageLevel getMinLogLevel() const { return mLogLevel; }
         /**
         @remarks
             Register a listener to this log
@@ -195,7 +195,7 @@ namespace Ogre {
         */
         class _OgrePrivate Stream
         {
-        protected:
+        private:
             Log* mTarget;
             LogMessageLevel mLevel;
             bool mMaskDebug;
@@ -212,13 +212,9 @@ namespace Ogre {
             {
 
             }
-            // copy constructor
-            Stream(const Stream& rhs) 
-                : mTarget(rhs.mTarget), mLevel(rhs.mLevel), mMaskDebug(rhs.mMaskDebug)
-            {
-                // explicit copy of stream required, gcc doesn't like implicit
-                mCache.str(rhs.mCache.str());
-            } 
+            // move constructor
+            Stream(Stream&& rhs) = default;
+
             ~Stream()
             {
                 // flush on destroy
